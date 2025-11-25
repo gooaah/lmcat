@@ -202,14 +202,14 @@ def get_num_copper(a):
 
     return numCu
 
-def get_direct_gap(traj, num_surf):
+def get_direct_gap(traj, num_surf, ele_M=['Cu'], ele_layer=['C']):
     """
     Get "direct" gap
     """
     a0 = traj[0]
     symbols = a0.get_chemical_symbols()
-    c_indice = [ind for ind in range(len(a0)) if symbols[ind]=='C']
-    cu_indice = [ind for ind in range(len(a0)) if symbols[ind]=='Cu']
+    c_indice = [ind for ind in range(len(a0)) if symbols[ind] in ele_layer]
+    cu_indice = [ind for ind in range(len(a0)) if symbols[ind]]
     # solid distance
     s_dist = 0
     t_dist = 0 # dist between mean of C and mean of Cu slab
