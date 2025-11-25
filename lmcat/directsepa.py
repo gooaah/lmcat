@@ -243,7 +243,7 @@ def get_direct_gap(traj, num_surf, ele_M=['Cu'], ele_layer=['C']):
 
     return s_dist, t_dist
 
-def simple_get_hist(traj,histRange, bins, num_surf, slab_sym):
+def simple_get_hist(traj,histRange, bins, slab_sym):
     """
     More pure function to get histogram
     """
@@ -258,13 +258,15 @@ def simple_get_hist(traj,histRange, bins, num_surf, slab_sym):
     for atms in traj:
         pos = atms.get_positions()
         zpos = pos[:,2]
+        # print(zpos)
         h, bin_edges = np.histogram(zpos[slab_indice], bins=bins, range=histRange, density=False)
         hist += h
+        # print(h)
 
     # make the unit to be #atoms/(A^3)
     binsize = (histRange[1] - histRange[0])/bins
     slab_hist = hist/len(traj)/area/binsize
-    zs = 0.5(bin_edges[:-1] + bin_edges[1:])
+    zs = 0.5*(bin_edges[:-1] + bin_edges[1:])
     # zs = np.arange(histRange[0], histRange[1], w_bin)
 
 
@@ -492,12 +494,13 @@ def fit_double_erf(zs,den, sigma=None):
     z1_0 = zs[np.argmax(drdz)]  # rising edge
     z2_0 = zs[np.argmin(drdz)]  # falling edge
 
-    p0 = (rho_0,z1_0,z2_0,sigma)
 
     if sigma == None:
         model = double_erf_sym
+        p0 = (rho_0,z1_0,z2_0,1)
     else:
         # fix sigma
+        p0 = (rho_0,z1_0,z2_0)
         def model(z, rho, z1, z2):
             arg1 = (z - z1) / (np.sqrt(2) * sigma)
             arg2 = (z - z2) / (np.sqrt(2) * sigma)
