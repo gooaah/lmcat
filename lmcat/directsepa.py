@@ -3,8 +3,9 @@ import numpy as np
 from scipy.ndimage import gaussian_filter1d
 from scipy.interpolate import interp1d, UnivariateSpline
 from scipy.signal import find_peaks
-from scipy.special import erfc
+from scipy.special import erfc, erf
 import scipy.optimize
+from scipy.optimize import curve_fit
 import ase.io
 import matplotlib.pyplot as plt
 import sys, os
@@ -242,7 +243,34 @@ def get_direct_gap(traj, num_surf, ele_M=['Cu'], ele_layer=['C']):
 
     return s_dist, t_dist
 
-def simple_get_hist(traj, histRange, bins, num_surf, slab_sym):
+def simple_get_hist(traj,histRange, bins, num_surf, slab_sym):
+    """
+    More pure function to get histogram
+    """
+    # Get area of xy plane; only suitable for orthogonal cell
+    cell = traj[0].get_cell()
+    area = cell[0,0] * cell[1,1]
+
+    a0 = traj[0]
+    symbols = a0.get_chemical_symbols()
+    slab_indice = [ind for ind in range(len(a0)) if symbols[ind]==slab_sym]
+    hist = np.zeros(bins)
+    for atms in traj:
+        pos = atms.get_positions()
+        zpos = pos[:,2]
+        h, bin_edges = np.histogram(zpos[slab_indice], bins=bins, range=histRange, density=False)
+        hist += h
+
+    # make the unit to be #atoms/(A^3)
+    binsize = (histRange[1] - histRange[0])/bins
+    slab_hist = hist/len(traj)/area/binsize
+    zs = 0.5(bin_edges[:-1] + bin_edges[1:])
+    # zs = np.arange(histRange[0], histRange[1], w_bin)
+
+
+    return zs, slab_hist
+
+def simple_get_hist_old(traj, histRange, bins, num_surf, slab_sym):
 
     # Get area of xy plane; only suitable for orthogonal cell
     cell = traj[0].get_cell()
@@ -350,6 +378,28 @@ def get_hist(traj, histRange, bins, num_surf, slab_sym='Cu', layer_syms=['C']):
 
     return c_hist, slab_hist, c_mean, s_dist, area
 
+def hist2profile_simple(slab_hist, gauss_width_slab, w_bin):
+    """
+    From histogram to density profile.
+    Simpler version. Assure area has been divide in histogram
+    """
+
+    # get smearing parameters
+    slab_sigma = gauss_width_slab/w_bin
+
+
+    print('Bin width: {}'.format(w_bin))
+    #print('Gaussian width: {}'.format(w_bin*gauss_sigma))
+    print('Gaussian width for slab: {}'.format(gauss_width_slab))
+    print(slab_sigma)
+
+
+    # slab_den = gaussian_filter1d(hist2, gauss_sigma) / area / w_bin
+    # c_den = gaussian_filter1d(hist1, gauss_sigma) / area / w_bin
+    slab_den = gaussian_filter1d(slab_hist, slab_sigma) / w_bin
+
+    return slab_den
+
 def hist2profile(slab_hist, c_hist, gauss_width_slab, gauss_width_C, w_bin, area):
     """
     From histogram to density profile
@@ -424,3 +474,45 @@ def get_distances(slab_prof, c_prof, c_mean, sample_range):
     print(sample_range[ind_half])
 
     return sample_range[ind_half], c_peaks[-1]
+
+def double_erf_sym(z, rho, z1, z2, sigma):
+    """symmetric sigma for both interfaces"""
+    arg1 = (z - z1) / (np.sqrt(2) * sigma)
+    arg2 = (z - z2) / (np.sqrt(2) * sigma)
+    return  0.5 * rho * (erf(arg1) - erf(arg2))
+
+def fit_double_erf(zs,den, sigma=None):
+    """
+    Fit double error function, to get slab thickness.
+    """
+    
+    # initial guess
+    rho_0 = den.max()
+    drdz = np.gradient(den, zs)
+    z1_0 = zs[np.argmax(drdz)]  # rising edge
+    z2_0 = zs[np.argmin(drdz)]  # falling edge
+
+    p0 = (rho_0,z1_0,z2_0,sigma)
+
+    if sigma == None:
+        model = double_erf_sym
+    else:
+        # fix sigma
+        def model(z, rho, z1, z2):
+            arg1 = (z - z1) / (np.sqrt(2) * sigma)
+            arg2 = (z - z2) / (np.sqrt(2) * sigma)
+            return  0.5 * rho * (erf(arg1) - erf(arg2)) 
+
+    popt, pcov = curve_fit(model, zs, den, p0=p0)
+    perr = np.sqrt(np.diag(pcov))
+
+    # parse results
+    res = {"popt": popt, "pcov": pcov}
+    if sigma == None:
+        rho, z1, z2, sigma_new = popt
+        res.update({'rho': rho, 'z1': z1, 'z2': z2, 'simga': sigma_new})
+    else:
+        rho, z1, z2 = popt
+        res.update({'rho': rho, 'z1': z1, 'z2': z2})
+
+    return res
