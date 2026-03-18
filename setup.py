@@ -15,6 +15,12 @@ setuptools.setup(
     # include_package_data=True,
     # exclude_package_date={'':['.gitignore']},
     packages=setuptools.find_packages(),
+    install_requires=[
+        'numpy>=1.21',
+        'scipy>=1.7',
+        'ase>=3.22',
+        'matplotlib>=3.4',
+    ],
     classifiers=[
         "Programming Language :: Python :: 3",
         "Operating System :: OS Independent",
